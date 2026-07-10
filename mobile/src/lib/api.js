@@ -2,8 +2,8 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
 export const BASE_URL = __DEV__
-  ? "http://192.168.0.63:4000/api" // change to your local IP
-  : "https://api.eldercare.in/api";
+  ? "https://eldercare-sand.vercel.app/api" // change to your local IP
+  : "https://eldercare-sand.vercel.app/api";
 
 const api = axios.create({
   baseURL: BASE_URL,

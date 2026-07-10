@@ -1,0 +1,478 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  CAREGIVER
+  ADMIN
+}
+
+enum VerificationStatus {
+  PENDING
+  UNDER_REVIEW
+  VERIFIED
+  REJECTED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  DISPUTED
+}
+
+enum PaymentStatus {
+  PENDING
+  HELD
+  RELEASED
+  REFUNDED
+  FAILED
+}
+
+enum ServiceType {
+  PERSONAL_CARE
+  MEDICATION_MANAGEMENT
+  COMPANIONSHIP
+  MOBILITY_ASSISTANCE
+  MEAL_PREPARATION
+  HOUSEKEEPING
+  TRANSPORTATION
+  MEDICAL_MONITORING
+}
+
+enum SubscriptionPlan {
+  FREE
+  FAMILY_BASIC
+  FAMILY_PREMIUM
+  ENTERPRISE
+}
+
+enum ReminderFrequency {
+  DAILY
+  TWICE_DAILY
+  THREE_TIMES_DAILY
+  WEEKLY
+  AS_NEEDED
+}
+
+enum ReportType {
+  NO_SHOW
+  CUSTOMER_CANCELLATION
+  QUALITY_COMPLAINT
+  SAFETY_CONCERN
+  BILLING_DISPUTE
+  EMERGENCY_INCIDENT
+}
+
+enum ReportStatus {
+  OPEN
+  INVESTIGATING
+  RESOLVED
+  CLOSED
+}
+
+enum DocumentType {
+  AADHAAR
+  PAN_CARD
+  POLICE_CHECK
+  CERTIFICATION
+  PHOTO_ID
+  LIVE_SELFIE
+}
+
+model User {
+  id        String   @id @default(uuid())
+  phone     String   @unique
+  email     String?  @unique
+  name      String
+  role      UserRole
+  avatarUrl String?
+  fcmToken  String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customerProfile  CustomerProfile?
+  caregiverProfile CaregiverProfile?
+  sessions         Session[]
+  notifications    Notification[]
+  reportsBy        Report[]          @relation("ReportedBy")
+  reportsAgainst   Report[]          @relation("ReportedAgainst")
+  otpRequests      OtpRequest[]
+  sentMessages     Message[]         @relation("SentMessages")
+
+  @@index([role])
+  @@index([createdAt])
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  isActive  Boolean  @default(true)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+}
+
+model OtpRequest {
+  id        String   @id @default(uuid())
+  phone     String
+  otp       String
+  userId    String?
+  expiresAt DateTime
+  isUsed    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([phone])
+  @@index([createdAt])
+}
+
+model CustomerProfile {
+  id                  String    @id @default(uuid())
+  userId              String    @unique
+  address             String?
+  city                String?
+  latitude            Decimal?  @db.Decimal(10, 8)
+  longitude           Decimal?  @db.Decimal(11, 8)
+  languagePreference  String    @default("en")
+  emergencyContact    String?
+  subscriptionPlan    SubscriptionPlan @default(FREE)
+  subscriptionEndDate DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  user                User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  elders              ElderProfile[]
+  bookings            Booking[]
+  subscriptions       Subscription[]
+  reviews             Review[]
+  favorites           CustomerFavorite[]
+  medicationReminders MedicationReminder[]
+
+  @@index([userId])
+}
+
+model CaregiverProfile {
+  id                 String             @id @default(uuid())
+  userId             String             @unique
+  city               String
+  bio                String?
+  serviceTypes       ServiceType[]
+  hourlyRate         Decimal            @db.Decimal(8, 2)
+  languages          String[]
+  certifications     String[]
+  yearsOfExperience  Int?
+  verificationStatus VerificationStatus @default(PENDING)
+  isOnline           Boolean            @default(false)
+  totalEarnings      Decimal            @default(0) @db.Decimal(12, 2)
+  totalHoursWorked   Decimal            @default(0) @db.Decimal(8, 2)
+  averageRating      Decimal?           @db.Decimal(3, 2)
+  totalReviews       Int                @default(0)
+  completedBookings  Int                @default(0)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  user          User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documents     CaregiverDocument[]
+  availability  CaregiverAvailability[]
+  bookings      Booking[]
+  reviews       Review[]
+  payouts       Payout[]
+  favoritedBy   CustomerFavorite[]
+
+  @@index([userId])
+  @@index([verificationStatus])
+  @@index([city])
+  @@index([isOnline])
+}
+
+model ElderProfile {
+  id                String   @id @default(uuid())
+  customerId        String
+  name              String
+  age               Int?
+  gender            String?
+  relationship      String?
+  medicalConditions String[]
+  medications       String[]
+  allergies         String[]
+  specialNeeds      String?
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  customer            CustomerProfile      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  bookings            Booking[]
+  medicationReminders MedicationReminder[]
+
+  @@index([customerId])
+}
+
+model MedicationReminder {
+  id         String            @id @default(uuid())
+  customerId String
+  elderId    String
+  name       String
+  dosage     String?
+  frequency  ReminderFrequency @default(DAILY)
+  times      String[]
+  notes      String?
+  isActive   Boolean           @default(true)
+  lastSentAt DateTime?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  customer CustomerProfile @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  elder    ElderProfile    @relation(fields: [elderId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([elderId])
+  @@index([isActive])
+}
+
+model CaregiverDocument {
+  id                String             @id @default(uuid())
+  caregiverId       String
+  documentType      DocumentType
+  s3Url             String
+  fileName          String
+  fileSize          Int?
+  status            VerificationStatus @default(PENDING)
+  uploadedAt        DateTime           @default(now())
+  verifiedAt        DateTime?
+  verificationNotes String?
+
+  caregiver CaregiverProfile @relation(fields: [caregiverId], references: [id], onDelete: Cascade)
+
+  @@index([caregiverId])
+}
+
+model CaregiverAvailability {
+  id          String   @id @default(uuid())
+  caregiverId String
+  dayOfWeek   String
+  startTime   String
+  endTime     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  caregiver CaregiverProfile @relation(fields: [caregiverId], references: [id], onDelete: Cascade)
+
+  @@unique([caregiverId, dayOfWeek])
+  @@index([caregiverId])
+}
+
+model Booking {
+  id               String        @id @default(uuid())
+  bookingNumber    String        @unique
+  customerId       String
+  caregiverId      String
+  elderId          String
+  bookingDate      DateTime      @db.Date
+  startTime        String
+  endTime          String
+  duration         Decimal       @db.Decimal(5, 2)
+  serviceType      ServiceType
+  status           BookingStatus @default(PENDING)
+  totalAmount      Decimal       @db.Decimal(10, 2)
+  specialNotes     String?
+  checkInTime      DateTime?
+  checkOutTime     DateTime?
+  actualDuration   Decimal?      @db.Decimal(5, 2)
+  cancelledBy      String?
+  cancellationNote String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  customer      CustomerProfile  @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  caregiver     CaregiverProfile @relation(fields: [caregiverId], references: [id], onDelete: Restrict)
+  elder         ElderProfile     @relation(fields: [elderId], references: [id], onDelete: Restrict)
+  payment       Payment?
+  review        Review?
+  reports       Report[]
+  gpsLogs       GpsLog[]
+  sessionPhotos SessionPhoto[]
+  messages      Message[]
+
+  @@index([customerId, bookingDate])
+  @@index([caregiverId, bookingDate])
+  @@index([status])
+  @@index([bookingDate])
+}
+
+model Payment {
+  id                String        @id @default(uuid())
+  bookingId         String        @unique
+  orderId           String        @unique
+  razorpayOrderId   String?       @unique
+  razorpayPaymentId String?       @unique
+  amount            Decimal       @db.Decimal(10, 2)
+  currency          String        @default("INR")
+  status            PaymentStatus @default(PENDING)
+  refundAmount      Decimal?      @db.Decimal(10, 2)
+  refundId          String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+  @@index([status])
+}
+
+model Review {
+  id          String   @id @default(uuid())
+  bookingId   String   @unique
+  customerId  String
+  caregiverId String
+  rating      Int
+  text        String?
+  createdAt   DateTime @default(now())
+
+  booking   Booking          @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  customer  CustomerProfile  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  caregiver CaregiverProfile @relation(fields: [caregiverId], references: [id], onDelete: Cascade)
+
+  @@index([caregiverId])
+  @@index([customerId])
+}
+
+model GpsLog {
+  id        String   @id @default(uuid())
+  bookingId String
+  latitude  Decimal  @db.Decimal(10, 8)
+  longitude Decimal  @db.Decimal(11, 8)
+  timestamp DateTime @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId, timestamp])
+}
+
+model Report {
+  id              String       @id @default(uuid())
+  bookingId       String?
+  reportType      ReportType
+  reportedById    String
+  reportedAgainstId String
+  description     String
+  evidence        Json?
+  status          ReportStatus @default(OPEN)
+  resolution      String?
+  refundAmount    Decimal?     @db.Decimal(10, 2)
+  reason          String?
+  suspensionDays  Int?
+  createdAt       DateTime     @default(now())
+  resolvedAt      DateTime?
+  updatedAt       DateTime     @updatedAt
+
+  booking         Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  reportedBy      User     @relation("ReportedBy", fields: [reportedById], references: [id], onDelete: Restrict)
+  reportedAgainst User     @relation("ReportedAgainst", fields: [reportedAgainstId], references: [id], onDelete: Restrict)
+
+  @@index([status])
+  @@index([reportedById])
+  @@index([reportedAgainstId])
+}
+
+model Notification {
+  id               String   @id @default(uuid())
+  userId           String
+  notificationType String
+  title            String
+  message          String?
+  data             Json?
+  isRead           Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+}
+
+model Subscription {
+  id           String           @id @default(uuid())
+  customerId   String
+  plan         SubscriptionPlan
+  monthlyPrice Decimal          @db.Decimal(8, 2)
+  status       String           @default("ACTIVE")
+  startDate    DateTime         @db.Date
+  endDate      DateTime?        @db.Date
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  customer CustomerProfile @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+}
+
+model Payout {
+  id          String   @id @default(uuid())
+  caregiverId String
+  amount      Decimal  @db.Decimal(10, 2)
+  bankAccount String
+  bankCode    String
+  status      String   @default("PENDING")
+  requestedAt DateTime @default(now())
+  processedAt DateTime?
+
+  caregiver CaregiverProfile @relation(fields: [caregiverId], references: [id], onDelete: Cascade)
+
+  @@index([caregiverId])
+}
+
+model SessionPhoto {
+  id        String   @id @default(uuid())
+  bookingId String
+  s3Key     String
+  caption   String?
+  createdAt DateTime @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  bookingId  String
+  senderId   String
+  senderRole String
+  text       String
+  createdAt  DateTime @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  sender  User    @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId, createdAt])
+}
+
+model CustomerFavorite {
+  id          String   @id @default(uuid())
+  customerId  String
+  caregiverId String
+  createdAt   DateTime @default(now())
+
+  customer  CustomerProfile  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  caregiver CaregiverProfile @relation(fields: [caregiverId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, caregiverId])
+  @@index([customerId])
+}

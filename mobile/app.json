@@ -11,7 +11,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#16a34a"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.eldercare.app",
@@ -62,7 +64,8 @@
           "photosPermission": "ElderCare needs photo access to upload caregiver documents."
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "expo-font"
     ],
     "scheme": "eldercare",
     "experiments": {

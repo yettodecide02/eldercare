@@ -14,31 +14,36 @@ const authenticate = async (req, res, next) => {
     const payload = verifyToken(token);
 
     if (payload.type === "temp") {
-      return res
-        .status(401)
-        .json({
-          error: "Temp token cannot access this route",
-          code: "TEMP_TOKEN",
-        });
+      return res.status(401).json({
+        error: "Temp token cannot access this route",
+        code: "TEMP_TOKEN",
+      });
     }
 
-    const session = await prisma.session.findUnique({ where: { token } });
-    if (!session || !session.isActive || session.expiresAt < new Date()) {
+    const session = await prisma.session.findFirst({
+      where: {
+        token,
+        isActive: true,
+        expiresAt: { gt: new Date() },
+      },
+      include: {
+        user: true,
+      },
+    });
+
+    if (!session) {
       return res
         .status(401)
         .json({ error: "Session expired or invalid", code: "SESSION_INVALID" });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: payload.userId },
-    });
-    if (!user || !user.isActive) {
+    if (session.user.id !== payload.userId || !session.user.isActive) {
       return res
         .status(401)
         .json({ error: "User account inactive", code: "ACCOUNT_INACTIVE" });
     }
 
-    req.user = user;
+    req.user = session.user;
     req.token = token;
     next();
   } catch (err) {
@@ -64,13 +69,11 @@ const requireRole =
         .status(401)
         .json({ error: "Authentication required", code: "UNAUTHORIZED" });
     if (!roles.includes(req.user.role)) {
-      return res
-        .status(403)
-        .json({
-          error: "Insufficient permissions",
-          code: "FORBIDDEN",
-          required: roles,
-        });
+      return res.status(403).json({
+        error: "Insufficient permissions",
+        code: "FORBIDDEN",
+        required: roles,
+      });
     }
     next();
   };

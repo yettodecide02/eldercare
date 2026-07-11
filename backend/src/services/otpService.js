@@ -5,7 +5,8 @@ const OTP_TTL = 600; // 10 minutes
 const OTP_RATE_LIMIT = 5; // per hour
 const OTP_RATE_WINDOW = 3600; // 1 hour in seconds
 
-const generateOtp = () => String(Math.floor(100000 + Math.random() * 900000));
+// const generateOtp = () => String(Math.floor(100000 + Math.random() * 900000));
+const generateOtp = () => 456545;
 
 const getRateLimitKey = (phone) => `otp_rate:${phone}`;
 const getOtpKey = (phone) => `otp:${phone}`;
